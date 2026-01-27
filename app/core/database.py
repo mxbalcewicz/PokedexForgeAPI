@@ -39,6 +39,7 @@ class Base(AsyncAttrs, DeclarativeBase):
         datetime.datetime: DateTime(timezone=True),
     }
 
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session

@@ -14,10 +14,15 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    email: Mapped[str] = mapped_column(
+        String(255), unique=True, index=True, nullable=False
+    )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    refresh_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
     )
 
     def verify_password(self, plain_password: str) -> bool:
@@ -45,14 +50,16 @@ class User(Base):
 
         user = cls(email=email)
         user.set_password(password)
-        
+
         db.add(user)
         await db.commit()
         await db.refresh(user)
         return user
 
     @classmethod
-    async def authenticate(cls, db: AsyncSession, email: str, password: str) -> "User | None":
+    async def authenticate(
+        cls, db: AsyncSession, email: str, password: str
+    ) -> "User | None":
         """Authenticate user by email and password"""
         user = await cls.get_by_email(db, email)
         if not user or not user.verify_password(password):

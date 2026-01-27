@@ -7,7 +7,9 @@ class UserCreate(BaseModel):
     """Schema for creating a new user"""
 
     email: EmailStr
-    password: str = Field(..., min_length=8, description="Password must be at least 8 characters")
+    password: str = Field(
+        ..., min_length=8, description="Password must be at least 8 characters"
+    )
 
 
 class UserUpdate(BaseModel):
@@ -31,7 +33,7 @@ class UserInDB(UserResponse):
     """Schema for user in database (includes password hash)"""
 
     password_hash: str
- 
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -39,6 +41,7 @@ class Token(BaseModel):
     """Schema for OAuth2 token response"""
 
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 

@@ -9,14 +9,12 @@ import jwt
 from app.auth.models import User
 from app.auth.schemas import UserCreate, UserResponse, Token, TokenData
 from app.core.database import get_db
-from app.auth.security import create_access_token
+from app.auth.security import create_access_token, create_refresh_token
 from app.core.settings import settings
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
-
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
 async def get_current_user(
@@ -29,9 +27,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=["HS256"]
-        )
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
@@ -45,7 +41,9 @@ async def get_current_user(
     return user
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
 async def register(
     user_create: UserCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -61,8 +59,8 @@ async def login(
 ) -> dict:
     """
     OAuth2 compatible token endpoint.
-    
-    Returns access token for valid credentials.
+
+    Returns access and refresh tokens for valid credentials.
     """
     user = await User.authenticate(db, form_data.username, form_data.password)
     if not user:
@@ -72,11 +70,80 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         subject=user.email, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    refresh_token = create_refresh_token(
+        subject=user.email, expires_delta=refresh_token_expires
+    )
+
+    # Store refresh token in database
+    user.refresh_token = refresh_token
+    db.add(user)
+    await db.commit()
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
+
+
+@router.post("/refresh", response_model=Token)
+async def refresh(
+    refresh_token: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """
+    Refresh access token using refresh token.
+
+    Returns new access and refresh tokens.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid refresh token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=["HS256"])
+        email: str = payload.get("sub")
+        token_type: str = payload.get("type")
+
+        if email is None or token_type != "refresh":
+            raise credentials_exception
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+
+    user = await User.get_by_email(db, email)
+    if user is None or user.refresh_token != refresh_token:
+        raise credentials_exception
+
+    # Create new access token
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        subject=user.email, expires_delta=access_token_expires
+    )
+
+    # Optionally create new refresh token (rotate it)
+    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    new_refresh_token = create_refresh_token(
+        subject=user.email, expires_delta=refresh_token_expires
+    )
+
+    # Store new refresh token in database
+    user.refresh_token = new_refresh_token
+    db.add(user)
+    await db.commit()
+
+    return {
+        "access_token": access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+    }
 
 
 @router.get("/me", response_model=UserResponse)
