@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     )
     ENVIRONMENT: Literal["local"] = "local" # Add more literals for test/production
 
+    SECRET_KEY: str
+
     PROJECT_NAME: str
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
@@ -29,9 +31,11 @@ class Settings(BaseSettings):
             password=self.POSTGRES_PASSWORD,
             host=self.POSTGRES_SERVER,
             port=self.POSTGRES_PORT,
-            path=f"/{self.POSTGRES_DB}",
+            path=self.POSTGRES_DB
         )
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+settings = get_settings()
