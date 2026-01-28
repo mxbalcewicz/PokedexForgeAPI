@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["local"] = "local"  # Add more literals for test/production
 
     SECRET_KEY: str
-    ACCESS_TOKEN_EXPIRE_MINUTES = 15
-    REFRESH_TOKEN_EXPIRE_DAYS = 7
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 2
 
     PROJECT_NAME: str
     POSTGRES_SERVER: str
