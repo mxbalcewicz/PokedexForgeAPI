@@ -1,7 +1,8 @@
-from app.core.config import get_settings
+from app.core.settings import settings
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from app.auth.endpoints import router as auth_router
 
 
 @asynccontextmanager
@@ -12,12 +13,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    settings = get_settings()
-
-    app = FastAPI(
-        title=settings.PROJECT_NAME,
-        lifespan=lifespan
-    )
+    app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 
     # Add CORS middleware for development
     if settings.ENVIRONMENT == "local":
@@ -31,4 +27,6 @@ def create_app() -> FastAPI:
 
     return app
 
+
 app = create_app()
+app.include_router(auth_router)

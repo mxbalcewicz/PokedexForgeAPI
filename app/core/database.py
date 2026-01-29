@@ -9,9 +9,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from app.core.config import get_settings
+from app.core.settings import settings
 
-settings = get_settings()
 engine = create_async_engine(
     str(settings.SQLALCHEMY_DATABASE_URI),
     echo=False,
@@ -39,6 +38,7 @@ class Base(AsyncAttrs, DeclarativeBase):
     type_annotation_map = {
         datetime.datetime: DateTime(timezone=True),
     }
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:

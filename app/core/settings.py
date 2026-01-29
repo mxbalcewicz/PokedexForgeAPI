@@ -11,7 +11,11 @@ class Settings(BaseSettings):
         env_ignore_empty=True,
         extra="ignore",
     )
-    ENVIRONMENT: Literal["local"] = "local" # Add more literals for test/production
+    ENVIRONMENT: Literal["local"] = "local"  # Add more literals for test/production
+
+    SECRET_KEY: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 2
 
     PROJECT_NAME: str
     POSTGRES_SERVER: str
@@ -29,9 +33,13 @@ class Settings(BaseSettings):
             password=self.POSTGRES_PASSWORD,
             host=self.POSTGRES_SERVER,
             port=self.POSTGRES_PORT,
-            path=f"/{self.POSTGRES_DB}",
+            path=self.POSTGRES_DB,
         )
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+settings = get_settings()
