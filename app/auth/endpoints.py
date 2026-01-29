@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.auth.security import create_access_token, create_refresh_token
 from app.core.settings import settings
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
@@ -57,11 +57,6 @@ async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """
-    OAuth2 compatible token endpoint.
-
-    Returns access and refresh tokens for valid credentials.
-    """
     user = await User.authenticate(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -80,16 +75,11 @@ async def login(
         subject=user.email, expires_delta=refresh_token_expires
     )
 
-    # Store refresh token in database
     user.refresh_token = refresh_token
     db.add(user)
     await db.commit()
 
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-    }
+    return Token(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/refresh", response_model=Token)
@@ -97,11 +87,6 @@ async def refresh(
     refresh_token: str,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """
-    Refresh access token using refresh token.
-
-    Returns new access and refresh tokens.
-    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid refresh token",
@@ -122,33 +107,25 @@ async def refresh(
     if user is None or user.refresh_token != refresh_token:
         raise credentials_exception
 
-    # Create new access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         subject=user.email, expires_delta=access_token_expires
     )
 
-    # Optionally create new refresh token (rotate it)
     refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     new_refresh_token = create_refresh_token(
         subject=user.email, expires_delta=refresh_token_expires
     )
 
-    # Store new refresh token in database
     user.refresh_token = new_refresh_token
     db.add(user)
     await db.commit()
 
-    return {
-        "access_token": access_token,
-        "refresh_token": new_refresh_token,
-        "token_type": "bearer",
-    }
+    return Token(access_token=access_token, refresh_token=new_refresh_token)
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-    """Get current authenticated user"""
     return current_user
