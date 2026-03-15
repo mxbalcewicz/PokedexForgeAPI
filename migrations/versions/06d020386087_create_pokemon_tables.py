@@ -1,8 +1,8 @@
-"""Create Pokemon data tables
+"""Create Pokemon tables
 
-Revision ID: 601830a6c422
+Revision ID: 06d020386087
 Revises: 063491c9dc19
-Create Date: 2026-03-01 17:45:25.131499
+Create Date: 2026-03-08 21:53:39.503157
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "601830a6c422"
+revision: str = "06d020386087"
 down_revision: Union[str, Sequence[str], None] = "063491c9dc19"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

@@ -3,7 +3,8 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.auth.endpoints import router as auth_router
-from app.pokemon.endpoints import router as pokemon_router
+from app.pokemon.endpoints import read_router as pokemon_read_router
+from app.pokemon.endpoints import management_router as pokemon_management_router
 
 
 @asynccontextmanager
@@ -31,4 +32,5 @@ def create_app() -> FastAPI:
 
 app = create_app()
 app.include_router(auth_router)
-app.include_router(pokemon_router)
+app.include_router(pokemon_read_router)
+app.include_router(pokemon_management_router)

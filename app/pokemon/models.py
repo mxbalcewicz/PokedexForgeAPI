@@ -97,18 +97,21 @@ class Pokemon(Base):
         back_populates="pokemon",
         uselist=False,
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     typing: Mapped[PokemonTyping] = relationship(
         "PokemonTyping",
         back_populates="pokemon",
         uselist=False,
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
-    physical_attributes: Mapped[PhysicalAttributes] = relationship(
+    physical_attributes: Mapped[PhysicalAttributes | None] = relationship(
         "PhysicalAttributes",
         back_populates="pokemon",
         uselist=False,
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     evolution: Mapped[PokemonEvolution | None] = relationship(
         "PokemonEvolution",
@@ -116,6 +119,7 @@ class Pokemon(Base):
         back_populates="pokemon",
         uselist=False,
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     @property

@@ -4,7 +4,7 @@ from typing import Optional
 from app.pokemon.enums import PokemonType
 
 
-class BaseStatsBase(BaseModel):
+class PokemonBaseStatsBase(BaseModel):
     hp: int = Field(..., ge=1, le=255)
     attack: int = Field(..., ge=1, le=255)
     defense: int = Field(..., ge=1, le=255)
@@ -13,11 +13,15 @@ class BaseStatsBase(BaseModel):
     speed: int = Field(..., ge=1, le=255)
 
 
-class BaseStatsCreate(BaseStatsBase):
+class PokemonBaseStatsCreate(PokemonBaseStatsBase):
     pass
 
 
-class BaseStatsRead(BaseStatsBase):
+class PokemonBaseStatsUpdate(PokemonBaseStatsBase):
+    pass
+
+
+class BaseStatsRead(PokemonBaseStatsBase):
     id: int
     total: int
 
@@ -40,14 +44,12 @@ class TypingCreate(TypingBase):
 
 
 class TypingRead(TypingBase):
-    id: int
-
     model_config = {"from_attributes": True}
 
 
 class PhysicalAttributesBase(BaseModel):
-    height: float = Field(..., gt=0, description="Height in meters")
-    weight: float = Field(..., gt=0, description="Weight in kilograms")
+    height: Optional[float] = Field(..., gt=0, description="Height in meters")
+    weight: Optional[float] = Field(..., gt=0, description="Weight in kilograms")
 
 
 class PhysicalAttributesCreate(PhysicalAttributesBase):
@@ -55,8 +57,6 @@ class PhysicalAttributesCreate(PhysicalAttributesBase):
 
 
 class PhysicalAttributesRead(PhysicalAttributesBase):
-    id: int
-
     model_config = {"from_attributes": True}
 
 
@@ -69,7 +69,6 @@ class EvolutionCreate(EvolutionBase):
 
 
 class EvolutionRead(EvolutionBase):
-    id: int
     evolves_from_name: Optional[str] = None
 
     model_config = {"from_attributes": True}
@@ -82,16 +81,22 @@ class PokemonBase(BaseModel):
 
 
 class PokemonCreate(PokemonBase):
-    base_stats: BaseStatsCreate
+    base_stats: Optional[PokemonBaseStatsCreate] = None
     typing: TypingCreate
-    physical_attributes: PhysicalAttributesCreate
-    evolution: EvolutionCreate = Field(default_factory=EvolutionCreate)
+    physical_attributes: Optional[PhysicalAttributesCreate] = None
+    evolution: Optional[EvolutionCreate] = None
+
+    @model_validator(mode="after")
+    def validate_evolution(self) -> PokemonCreate:
+        if self.evolution and self.evolution.evolves_from_id == self.pokedex_id:
+            raise ValueError("A Pokemon cannot evolve from itself.")
+        return self
 
 
 class PokemonUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     generation: Optional[int] = Field(None, ge=1, le=9)
-    base_stats: Optional[BaseStatsCreate] = None
+    base_stats: Optional[PokemonBaseStatsCreate] = None
     typing: Optional[TypingCreate] = None
     physical_attributes: Optional[PhysicalAttributesCreate] = None
     evolution: Optional[EvolutionCreate] = None
@@ -99,9 +104,9 @@ class PokemonUpdate(BaseModel):
 
 class PokemonRead(PokemonBase):
     id: int
-    base_stats: BaseStatsRead
+    base_stats: Optional[BaseStatsRead] = None
     typing: TypingRead
-    physical_attributes: PhysicalAttributesRead
+    physical_attributes: Optional[PhysicalAttributesRead] = None
     evolution: Optional[EvolutionRead] = None
 
     model_config = {"from_attributes": True}

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db
 from app.pokemon.models import (
@@ -12,15 +12,21 @@ from app.pokemon.models import (
     PhysicalAttributes,
     PokemonEvolution,
 )
-from app.pokemon.schemas import PokemonRead, PokemonSummary, PokemonCreate
-from app.pokemon.helpers import get_pokemon_or_404
+from app.pokemon.schemas import (
+    PokemonRead,
+    PokemonSummary,
+    PokemonCreate,
+    PokemonBaseStatsUpdate,
+)
+from app.pokemon.helpers.query_helpers import PokemonQuery
 from app.pokemon.enums import PokemonType
 
-router = APIRouter(prefix="/pokemon", tags=["Pokemon"])
+read_router = APIRouter(prefix="/pokemon", tags=["Pokemon Read Endpoints"])
+management_router = APIRouter(prefix="/pokemon", tags=["Pokemon Management Endpoints"])
 
 
-@router.get("/", response_model=list[PokemonSummary])
-async def list_pokemon(
+@read_router.get("/summary", response_model=list[PokemonSummary])
+async def pokemon_summary(
     generation: int | None = Query(
         None, ge=1, le=9, description="Filter by generation"
     ),
@@ -48,48 +54,96 @@ async def list_pokemon(
     return list(result.all())
 
 
-@router.post("/", response_model=PokemonRead, status_code=status.HTTP_201_CREATED)
+@read_router.get("/{pokedex_id}", response_model=PokemonRead)
+async def get_pokemon(pokedex_id: int, db: AsyncSession = Depends(get_db)) -> Pokemon:
+    return await PokemonQuery.get_pokemon_or_404(pokedex_id=pokedex_id, db=db)
+
+
+@management_router.post(
+    "/",
+    response_model=PokemonRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new Pokemon",
+)
 async def create_pokemon(
-    pokemon_data: PokemonCreate,
+    payload: PokemonCreate,
     db: AsyncSession = Depends(get_db),
 ) -> Pokemon:
-    data = pokemon_data.model_dump()
-
-    pokemon = Pokemon(
-        pokedex_id=data["pokedex_id"],
-        name=data["name"],
-        generation=data["generation"],
-    )
-
-    pokemon.base_stats = PokemonBaseStats(**data["base_stats"])
-    pokemon.typing = PokemonTyping(**data["typing"])
-    pokemon.physical_attributes = PhysicalAttributes(**data["physical_attributes"])
-
-    evolves_from_id = data.get("evolution", {}).get("evolves_from_id")
-    if evolves_from_id:
-        exists = await db.get(Pokemon, evolves_from_id)
-        if not exists:
+    if payload.evolution and payload.evolution.evolves_from_id is not None:
+        parent = await db.get(Pokemon, payload.evolution.evolves_from_id)
+        if not parent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Pokemon #{evolves_from_id} not found",
+                detail=f"No Pokemon found with id={payload.evolution.evolves_from_id}.",
             )
-        pokemon.evolution = PokemonEvolution(evolves_from_id=evolves_from_id)
+
+    pokemon = Pokemon(
+        pokedex_id=payload.pokedex_id,
+        name=payload.name,
+        generation=payload.generation,
+        base_stats=PokemonBaseStats(**payload.base_stats.model_dump())
+        if payload.base_stats
+        else None,
+        typing=PokemonTyping(**payload.typing.model_dump()),
+        physical_attributes=PhysicalAttributes(
+            **payload.physical_attributes.model_dump()
+        )
+        if payload.physical_attributes
+        else None,
+        evolution=PokemonEvolution(**payload.evolution.model_dump())
+        if payload.evolution
+        else None,
+    )
 
     db.add(pokemon)
     try:
         await db.commit()
-    except IntegrityError:
+    except SQLAlchemyError:
         await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="pokemon with that pokedex_id or name already exists",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="...")
 
     await db.refresh(pokemon)
+    return pokemon
 
-    return await get_pokemon_or_404(pokemon.id, db)
+
+@management_router.delete("/{pokedex_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pokemon(pokedex_id: int, db: AsyncSession = Depends(get_db)):
+    query = select(Pokemon).where(Pokemon.pokedex_id == pokedex_id)
+    result = await db.scalars(query)
+    pokemon = result.first()
+    if not pokemon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pokemon #{pokedex_id} not found",
+        )
+    await db.delete(pokemon)
+    try:
+        await db.commit()
+    except SQLAlchemyError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete Pokemon.",
+        )
 
 
-@router.get("/{pokemon_id}", response_model=PokemonRead)
-async def get_pokemon(pokemon_id: int, db: AsyncSession = Depends(get_db)) -> Pokemon:
-    return await get_pokemon_or_404(pokemon_id, db)
+@management_router.patch("/stats/{pokedex_id}", response_model=PokemonRead)
+async def update_pokemon_stats(
+    pokedex_id: int, payload: PokemonBaseStatsUpdate, db: AsyncSession = Depends(get_db)
+):
+    pokemon = await PokemonQuery.get_pokemon_or_404(pokedex_id=pokedex_id, db=db)
+
+    if pokemon.base_stats:
+        for key, value in payload.model_dump(exclude_unset=True).items():
+            setattr(pokemon.base_stats, key, value)
+    else:
+        pokemon.base_stats = PokemonBaseStats(**payload.model_dump())
+
+    db.add(pokemon)
+    try:
+        await db.commit()
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    await db.refresh(pokemon)
+    return pokemon
