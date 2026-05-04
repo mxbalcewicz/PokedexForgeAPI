@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import jwt
 
 from app.auth.models import User
-from app.auth.schemas import UserCreate, UserResponse, Token, TokenData
+from app.auth.schemas import (
+    UserCreate,
+    UserResponse,
+    Token,
+    TokenData,
+    RefreshTokenData,
+)
 from app.core.database import get_db
 from app.auth.security import create_access_token, create_refresh_token
 from app.core.settings import settings
@@ -84,7 +90,7 @@ async def login(
 
 @router.post("/refresh", response_model=Token)
 async def refresh(
-    refresh_token: str,
+    request: RefreshTokenData,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     credentials_exception = HTTPException(
@@ -94,7 +100,9 @@ async def refresh(
     )
 
     try:
-        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(
+            request.refresh_token, settings.SECRET_KEY, algorithms=["HS256"]
+        )
         email: str = payload.get("sub")
         token_type: str = payload.get("type")
 
@@ -104,7 +112,7 @@ async def refresh(
         raise credentials_exception
 
     user = await User.get_by_email(db, email)
-    if user is None or user.refresh_token != refresh_token:
+    if user is None or user.refresh_token != request.refresh_token:
         raise credentials_exception
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

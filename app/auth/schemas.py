@@ -38,3 +38,7 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     sub: str
     exp: Optional[int] = None
+
+
+class RefreshTokenData(BaseModel):
+    refresh_token: str
