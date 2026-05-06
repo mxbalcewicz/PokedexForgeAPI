@@ -8,7 +8,6 @@ from app.auth.schemas import UserCreate
 class TestAuthEndpoints:
     @pytest.mark.asyncio
     async def test_register_user(self, client: AsyncClient, db_session: AsyncSession):
-        """Test user registration."""
         user_data = UserCreate(email="test@example.com", password="password123")
         response = await client.post("/auth/register", json=user_data.model_dump())
         data = response.json()

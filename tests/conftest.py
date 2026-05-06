@@ -1,4 +1,4 @@
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Generator
 
 import pytest
 import pytest_asyncio
@@ -16,7 +16,7 @@ from app.main import app
 
 
 @pytest.fixture(scope="session")
-def postgres_container():
+def postgres_container() -> Generator[PostgresContainer, None, None]:
     with PostgresContainer("postgres:16") as pg:
         yield pg
 
@@ -44,7 +44,7 @@ async def db_engine(async_db_url: str) -> AsyncGenerator[AsyncEngine, None]:
 
 
 @pytest_asyncio.fixture
-async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
+async def db_session(db_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
     """
     Each test gets its own transaction that is rolled back on teardown,
     keeping tests fully isolated without recreating the schema.
